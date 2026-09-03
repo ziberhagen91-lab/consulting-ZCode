@@ -1,0 +1,56 @@
+# Local development stack.
+# The apps (web / api / worker) run on the host via `pnpm dev` —
+# compose only provides the infrastructure: our PostgreSQL and Flectra (with its own DB).
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: consulting-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-consulting}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-consulting}
+    ports:
+      - "${DB_HOST_PORT:-5432}:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-consulting} -d ${POSTGRES_DB:-consulting}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  flectra-db:
+    image: postgres:16-alpine
+    container_name: consulting-flectra-db
+    environment:
+      POSTGRES_USER: ${FLECTRA_DB_USER:-flectra}
+      POSTGRES_PASSWORD: ${FLECTRA_DB_PASSWORD:?Set FLECTRA_DB_PASSWORD in .env}
+    volumes:
+      - flectra_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${FLECTRA_DB_USER:-flectra}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  flectra:
+    image: flectrahq/flectra:latest
+    container_name: consulting-flectra
+    depends_on:
+      flectra-db:
+        condition: service_healthy
+    environment:
+      HOST: flectra-db
+      PORT: "5432"
+      USER: ${FLECTRA_DB_USER:-flectra}
+      PASSWORD: ${FLECTRA_DB_PASSWORD:?Set FLECTRA_DB_PASSWORD in .env}
+    ports:
+      - "${FLECTRA_HOST_PORT:-7073}:7073"
+    volumes:
+      - flectra_data:/var/lib/flectra
+    tty: true
+
+volumes:
+  db_data:
+  flectra_db_data:
+  flectra_data:
