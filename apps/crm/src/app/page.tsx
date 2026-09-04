@@ -25,6 +25,9 @@ export default function Home() {
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [currentPage, setCurrentPage] = useState(1);
+  const leadsPerPage = 9;
   const [showNewLead, setShowNewLead] = useState(false);
   const [showEditLead, setShowEditLead] = useState(false);
   const [error, setError] = useState("");
@@ -63,6 +66,7 @@ export default function Home() {
 
   const filteredLeads = leads.filter((lead) => {
     const query = search.trim().toLowerCase();
+    if (statusFilter !== "ALL" && lead.status !== statusFilter) return false;
     if (!query) return true;
     return (
       lead.name.toLowerCase().includes(query) ||
@@ -70,6 +74,9 @@ export default function Home() {
       (lead.company ?? "").toLowerCase().includes(query)
     );
   });
+
+  const totalPages = Math.max(1, Math.ceil(filteredLeads.length / leadsPerPage));
+  const paginatedLeads = filteredLeads.slice((currentPage - 1) * leadsPerPage, currentPage * leadsPerPage);
 
   return (
     <main
@@ -147,7 +154,7 @@ export default function Home() {
       >
 <>{activeView === "Dashboard" && (<section style={{ marginBottom: 30 }}><h1 style={{ fontSize: 34, margin: 0 }}>Dashboard</h1><p style={{ color: "#75809a", marginTop: 6 }}>Overview of your CRM pipeline</p><div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(160px, 1fr))", gap: 14, marginTop: 24 }}>{[["Total Leads", leads.length],["New Leads", newLeads.length],["Synced", syncedLeads.length],["Failed", failedLeads.length]].map(([title,value]) => (<div key={String(title)} style={{ background: "#fff", border: "1px solid #e4e6ee", borderRadius: 14, padding: 20 }}><div style={{ color: "#75809a", fontSize: 13 }}>{title}</div><div style={{ fontSize: 30, fontWeight: 800, marginTop: 8 }}>{value}</div></div>))}</div></section>)}</>
 
-        {activeView === "Leads" && (<><header
+{activeView === "Leads" && (<><header
           style={{
             display: "flex",
             justifyContent: "space-between",
@@ -162,7 +169,7 @@ export default function Home() {
             </p>
           </div>
 
-          <div style={{ display: "flex", gap: 12, alignItems: "center" }}><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search leads..." style={{ width: 240, padding: "10px 14px", border: "1px solid #e2e5ef", borderRadius: 10, background: "#fff", fontSize: 14, color: "#182033", outline: "none" }} /><div style={{ padding: "10px 14px", background: "#fff", border: "1px solid #e2e5ef", borderRadius: 10, fontSize: 14, color: "#75809a" }}>{loading ? "Loading..." : `${leads.length} leads`}</div><button type="button" onClick={() => setShowNewLead(true)} style={{ padding: "10px 16px", background: "#182033", color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>+ New Lead</button></div>
+          <div style={{ display: "flex", gap: 12, alignItems: "center" }}><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} style={{ padding: "10px 12px", border: "1px solid #e2e5ef", borderRadius: 10, background: "#fff", color: "#182033", fontSize: 14 }}><option value="ALL">All</option><option value="NEW">New</option><option value="SYNCED">Synced</option><option value="FAILED">Failed</option></select><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search leads..." style={{ width: 240, padding: "10px 14px", border: "1px solid #e2e5ef", borderRadius: 10, background: "#fff", fontSize: 14, color: "#182033", outline: "none" }} /><div style={{ padding: "10px 14px", background: "#fff", border: "1px solid #e2e5ef", borderRadius: 10, fontSize: 14, color: "#75809a" }}>{loading ? "Loading..." : `${leads.length} leads`}</div><button type="button" onClick={() => setShowNewLead(true)} style={{ padding: "10px 16px", background: "#182033", color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>+ New Lead</button></div>
         </header>
 
         {showNewLead && (<div onClick={() => setShowNewLead(false)} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.35)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}><div onClick={(event) => event.stopPropagation()} style={{ width: 480, maxWidth: "calc(100vw - 32px)", background: "#fff", borderRadius: 16, padding: 24, boxShadow: "0 20px 60px rgba(0,0,0,0.18)" }}><h2 style={{ margin: 0, fontSize: 22 }}>New Lead</h2><p style={{ color: "#75809a", marginTop: 6 }}>Create a new lead</p><form onSubmit={async (event) => { event.preventDefault(); const form = event.currentTarget; const data = new FormData(form); try { const response = await fetch("http://localhost:4000/leads", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: String(data.get("name") || ""), email: String(data.get("email") || ""), company: String(data.get("company") || ""), message: String(data.get("message") || "") }) }); if (!response.ok) { throw new Error((await response.text()) || "Failed to create lead"); } setShowNewLead(false); window.location.reload(); } catch (err) { setError(err instanceof Error ? err.message : "Failed to create lead"); } }}><input name="name" required placeholder="Name" style={{ width: "100%", boxSizing: "border-box", background: "#fff", colorScheme: "light", padding: "11px 12px", marginTop: 18, border: "1px solid #e2e5ef", borderRadius: 10, fontSize: 14, color: "#182033" }} /><input name="email" required type="email" placeholder="Email" style={{ width: "100%", boxSizing: "border-box", background: "#fff", colorScheme: "light", padding: "11px 12px", marginTop: 12, border: "1px solid #e2e5ef", borderRadius: 10, fontSize: 14, color: "#182033" }} /><input name="company" placeholder="Company" style={{ width: "100%", boxSizing: "border-box", background: "#fff", colorScheme: "light", padding: "11px 12px", marginTop: 12, border: "1px solid #e2e5ef", borderRadius: 10, fontSize: 14, color: "#182033" }} /><textarea name="message" required minLength={10} placeholder="Message (min. 10 characters)" rows={4} style={{ width: "100%", boxSizing: "border-box", background: "#fff", colorScheme: "light", padding: "11px 12px", marginTop: 12, border: "1px solid #e2e5ef", borderRadius: 10, fontSize: 14, color: "#182033", resize: "vertical" }} /><div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 18 }}><button type="button" onClick={() => setShowNewLead(false)} style={{ padding: "10px 16px", background: "#fff", color: "#182033", border: "1px solid #e2e5ef", borderRadius: 10, cursor: "pointer" }}>Cancel</button><button type="submit" style={{ padding: "10px 16px", background: "#5b36e8", color: "#fff", border: "none", borderRadius: 10, cursor: "pointer", fontWeight: 600 }}>Create Lead</button></div></form></div></div>)}
@@ -228,11 +235,11 @@ export default function Home() {
           }}
         >
           {columns.map((column) => {
-            const columnLeads = filteredLeads.filter(
+            const columnLeads = paginatedLeads.filter(
               (lead) => lead.status === column.status
             );
 
-            return (
+  return (
               <div
                 key={column.status}
                 style={{
@@ -309,6 +316,8 @@ export default function Home() {
         </div>
         </>)}
       </section>
+
+<div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 14, marginTop: 24, marginBottom: 24 }}><button type="button" disabled={currentPage === 1} onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} style={{ padding: "9px 14px", border: "1px solid #e2e5ef", borderRadius: 9, background: "#fff", color: "#182033", cursor: currentPage === 1 ? "not-allowed" : "pointer", opacity: currentPage === 1 ? 0.5 : 1 }}>Previous</button><span style={{ fontSize: 14, color: "#75809a" }}>Page {currentPage} of {totalPages}</span><button type="button" disabled={currentPage === totalPages} onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))} style={{ padding: "9px 14px", border: "1px solid #e2e5ef", borderRadius: 9, background: "#fff", color: "#182033", cursor: currentPage === totalPages ? "not-allowed" : "pointer", opacity: currentPage === totalPages ? 0.5 : 1 }}>Next</button></div>
 
       {showEditLead && selectedLead && (<div onClick={() => setShowEditLead(false)} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.35)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1100 }}><div onClick={(event) => event.stopPropagation()} style={{ width: 480, maxWidth: "calc(100vw - 32px)", background: "#fff", borderRadius: 16, padding: 24, boxShadow: "0 20px 60px rgba(0,0,0,0.18)" }}><h2 style={{ margin: 0, fontSize: 22 }}>Edit Lead</h2><p style={{ color: "#75809a", marginTop: 6 }}>Update lead information</p><form onSubmit={async (event) => { event.preventDefault(); const form = event.currentTarget; const data = new FormData(form); try { const response = await fetch(`http://localhost:4000/leads/${selectedLead.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: String(data.get("name") || ""), email: String(data.get("email") || ""), company: String(data.get("company") || ""), message: String(data.get("message") || "") }) }); if (!response.ok) { throw new Error((await response.text()) || "Failed to update lead"); } setShowEditLead(false); setSelectedLead(null); window.location.reload(); } catch (err) { setError(err instanceof Error ? err.message : "Failed to update lead"); } }}><input name="name" required defaultValue={selectedLead.name} style={{ width: "100%", boxSizing: "border-box", background: "#fff", colorScheme: "light", color: "#182033", padding: "11px 12px", marginTop: 18, border: "1px solid #e2e5ef", borderRadius: 10, fontSize: 14 }} /><input name="email" required type="email" defaultValue={selectedLead.email} style={{ width: "100%", boxSizing: "border-box", background: "#fff", colorScheme: "light", color: "#182033", padding: "11px 12px", marginTop: 12, border: "1px solid #e2e5ef", borderRadius: 10, fontSize: 14 }} /><input name="company" defaultValue={selectedLead.company || ""} style={{ width: "100%", boxSizing: "border-box", background: "#fff", colorScheme: "light", color: "#182033", padding: "11px 12px", marginTop: 12, border: "1px solid #e2e5ef", borderRadius: 10, fontSize: 14 }} /><textarea name="message" required minLength={10} defaultValue={selectedLead.message} rows={4} style={{ width: "100%", boxSizing: "border-box", background: "#fff", colorScheme: "light", color: "#182033", padding: "11px 12px", marginTop: 12, border: "1px solid #e2e5ef", borderRadius: 10, fontSize: 14, resize: "vertical" }} /><div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 18 }}><button type="button" onClick={() => setShowEditLead(false)} style={{ padding: "10px 16px", background: "#fff", color: "#182033", border: "1px solid #e2e5ef", borderRadius: 10, cursor: "pointer" }}>Cancel</button><button type="submit" style={{ padding: "10px 16px", background: "#5b36e8", color: "#fff", border: "none", borderRadius: 10, cursor: "pointer", fontWeight: 600 }}>Save Changes</button></div></form></div></div>)}
 
@@ -497,6 +506,22 @@ export default function Home() {
     </main>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
