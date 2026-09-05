@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState } from "react";
 
@@ -25,6 +25,13 @@ export default function Home() {
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [contactSearch, setContactSearch] = useState("");
+  const [companySearch, setCompanySearch] = useState("");
+  const [hoveredCompany, setHoveredCompany] = useState("");
+  const [hoveredContact, setHoveredContact] = useState("");
+  const [hoveredActivity, setHoveredActivity] = useState("");
+  const [apiStatus, setApiStatus] = useState("Not checked");
+  const [flectraStatus, setFlectraStatus] = useState("Not checked");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [currentPage, setCurrentPage] = useState(1);
   const leadsPerPage = 9;
@@ -32,6 +39,7 @@ export default function Home() {
   const [showEditLead, setShowEditLead] = useState(false);
   const [error, setError] = useState("");
   const [activeView, setActiveView] = useState("Leads");
+  const [hoveredNav, setHoveredNav] = useState("");
 
   useEffect(() => {
     fetch("http://localhost:4000/leads")
@@ -64,11 +72,44 @@ export default function Home() {
 
 
 
+  const contacts = Object.values(leads.reduce<Record<string, { name: string; email: string; company: string; latest: Lead }>>((acc, lead) => { const key = lead.email.toLowerCase(); const company = (lead.company ?? "No company").trim() || "No company"; if (!acc[key]) acc[key] = { name: lead.name, email: lead.email, company, latest: lead }; if (new Date(lead.createdAt) > new Date(acc[key].latest.createdAt)) acc[key].latest = lead; return acc; }, {}));
+  const activities = leads.flatMap((lead) => [{ id: lead.id + "-updated", type: "Lead updated", lead, date: lead.updatedAt }, { id: lead.id + "-created", type: "Lead created", lead, date: lead.createdAt }]).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const companies = Object.values(leads.reduce<Record<string, { name: string; leads: number; latest: Lead }>>((acc, lead) => { const name = (lead.company ?? "No company").trim() || "No company"; if (!acc[name]) acc[name] = { name, leads: 0, latest: lead }; acc[name].leads += 1; if (new Date(lead.createdAt) > new Date(acc[name].latest.createdAt)) acc[name].latest = lead; return acc; }, {}));
+  const filteredCompanies = companies.filter((company) => company.name.toLowerCase().includes(companySearch.toLowerCase()));
+  const filteredContacts = contacts.filter((contact) => contact.name.toLowerCase().includes(contactSearch.toLowerCase()) || contact.email.toLowerCase().includes(contactSearch.toLowerCase()) || contact.company.toLowerCase().includes(contactSearch.toLowerCase()));
+  const reportCompanies = companies.sort((a, b) => b.leads - a.leads).slice(0, 5);
+
+  const checkApi = async () => {
+    setApiStatus("Checking...");
+    try {
+      const response = await fetch("http://localhost:4000/health");
+      setApiStatus(response.ok ? "Connected" : "API error");
+    } catch {
+      setApiStatus("Offline");
+    }
+  };
+
+  const checkFlectra = async () => {
+    setFlectraStatus("Checking...");
+    try {
+      const response = await fetch("http://localhost:4000/health");
+      if (!response.ok) {
+        setFlectraStatus("Offline");
+        return;
+      }
+      const data = await response.json();
+      setFlectraStatus(data.some((lead: Lead) => lead.flectraLeadId) ? "Connected" : "No synced leads");
+    } catch {
+      setFlectraStatus("Offline");
+    }
+  };
+
   const filteredLeads = leads.filter((lead) => {
     const query = search.trim().toLowerCase();
     if (statusFilter !== "ALL" && lead.status !== statusFilter) return false;
     if (!query) return true;
-    return (
+
+  return (
       lead.name.toLowerCase().includes(query) ||
       lead.email.toLowerCase().includes(query) ||
       (lead.company ?? "").toLowerCase().includes(query)
@@ -77,6 +118,7 @@ export default function Home() {
 
   const totalPages = Math.max(1, Math.ceil(filteredLeads.length / leadsPerPage));
   const paginatedLeads = filteredLeads.slice((currentPage - 1) * leadsPerPage, currentPage * leadsPerPage);
+
 
   return (
     <main
@@ -120,11 +162,14 @@ export default function Home() {
             <div
               key={item}
               onClick={() => setActiveView(item)}
+              onMouseEnter={() => setHoveredNav(item)}
+              onMouseLeave={() => setHoveredNav("")}
               style={{
                 padding: "13px 14px",
                 borderRadius: 10,
-                background: item === activeView ? "#5936df" : "transparent",
+                background: item === activeView ? "#5936df" : hoveredNav === item ? "rgba(89,54,223,0.16)" : "transparent",
                 fontWeight: item === activeView ? 700 : 500,
+                cursor: "pointer",
               }}
             >
               {item}
@@ -154,6 +199,10 @@ export default function Home() {
       >
 <>{activeView === "Dashboard" && (<section style={{ marginBottom: 30 }}><h1 style={{ fontSize: 34, margin: 0 }}>Dashboard</h1><p style={{ color: "#75809a", marginTop: 6 }}>Overview of your CRM pipeline</p><div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(160px, 1fr))", gap: 14, marginTop: 24 }}>{[["Total Leads", leads.length],["New Leads", newLeads.length],["Synced", syncedLeads.length],["Failed", failedLeads.length]].map(([title,value]) => (<div key={String(title)} style={{ background: "#fff", border: "1px solid #e4e6ee", borderRadius: 14, padding: 20 }}><div style={{ color: "#75809a", fontSize: 13 }}>{title}</div><div style={{ fontSize: 30, fontWeight: 800, marginTop: 8 }}>{value}</div></div>))}</div></section>)}</>
 
+<>{activeView === "Contacts" && (<section><h1 style={{ fontSize: 34, margin: 0 }}>Contacts</h1><p style={{ color: "#75809a", marginTop: 6 }}>Contacts from your leads</p><input value={contactSearch} onChange={(e) => setContactSearch(e.target.value)} placeholder="Search contacts..." style={{ marginTop: 18, width: "100%", maxWidth: 420, padding: "11px 14px", border: "1px solid #dfe2ea", borderRadius: 10, fontSize: 14, outline: "none" }} /><div style={{ marginTop: 24, background: "#fff", border: "1px solid #e4e6ee", borderRadius: 14, overflow: "hidden" }}><div style={{ display: "grid", gridTemplateColumns: "1.2fr 1.4fr 1.2fr 1fr", padding: "14px 18px", background: "#f7f8fc", fontSize: 12, fontWeight: 700, color: "#75809a" }}><div>NAME</div><div>EMAIL</div><div>COMPANY</div><div>LAST LEAD</div></div>{filteredContacts.map((contact) => (<div key={contact.email} onClick={() => setSelectedLead(contact.latest)} onMouseEnter={() => setHoveredContact(contact.email)} onMouseLeave={() => setHoveredContact("")} style={{ display: "grid", gridTemplateColumns: "1.2fr 1.4fr 1.2fr 1fr", padding: "16px 18px", borderTop: "1px solid #eef0f5", alignItems: "center", cursor: "pointer", transition: "background 0.15s ease", background: hoveredContact === contact.email ? "#f7f5ff" : "#fff" }}><div style={{ fontWeight: 700 }}>{contact.name}</div><div style={{ color: "#5f6880" }}>{contact.email}</div><div>{contact.company}</div><div style={{ color: "#75809a", fontSize: 13 }}>{new Date(contact.latest.createdAt).toLocaleDateString()}</div></div>))}</div></section>)}</>
+<>{activeView === "Reports" && (<section><h1 style={{ fontSize: 34, margin: 0 }}>Reports</h1><p style={{ color: "#75809a", marginTop: 6 }}>CRM performance overview</p><div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(160px, 1fr))", gap: 14, marginTop: 24 }}>{[["Total Leads", leads.length],["New", newLeads.length],["Synced", syncedLeads.length],["Failed", failedLeads.length]].map(([title,value]) => (<div key={String(title)} style={{ background: "#fff", border: "1px solid #e4e6ee", borderRadius: 14, padding: 20 }}><div style={{ color: "#75809a", fontSize: 13 }}>{title}</div><div style={{ fontSize: 30, fontWeight: 800, marginTop: 8 }}>{value}</div></div>))}</div><div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(180px, 1fr))", gap: 14, marginTop: 24 }}>{[["New", newLeads.length],["Synced", syncedLeads.length],["Failed", failedLeads.length]].map(([title,value]) => (<div key={String(title)} style={{ background: "#fff", border: "1px solid #e4e6ee", borderRadius: 14, padding: 20 }}><div style={{ color: "#75809a", fontSize: 13 }}>{title} leads</div><div style={{ fontSize: 26, fontWeight: 800, marginTop: 8 }}>{value}</div></div>))}</div><div style={{ marginTop: 24, background: "#fff", border: "1px solid #e4e6ee", borderRadius: 14, overflow: "hidden" }}><div style={{ padding: "16px 18px", fontWeight: 700 }}>Top Companies</div>{reportCompanies.map((company) => (<div key={company.name} style={{ display: "grid", gridTemplateColumns: "2fr 1fr", padding: "14px 18px", borderTop: "1px solid #eef0f5" }}><div>{company.name}</div><div>{company.leads} leads</div></div>))}</div></section>)}</>
+<>{activeView === "Settings" && (<section><h1 style={{ fontSize: 34, margin: 0 }}>Settings</h1><p style={{ color: "#75809a", marginTop: 6 }}>CRM configuration and system information</p><div style={{ marginTop: 24, background: "#fff", border: "1px solid #e4e6ee", borderRadius: 14, padding: 22 }}><h3 style={{ marginTop: 0 }}>System</h3><div style={{ display: "grid", gap: 14 }}><div><div style={{ color: "#75809a", fontSize: 13 }}>CRM</div><div style={{ fontWeight: 700, marginTop: 4 }}>Consulting CRM</div></div><div><div style={{ color: "#75809a", fontSize: 13 }}>API</div><div style={{ fontWeight: 700, marginTop: 4 }}>http://localhost:4000</div><button onClick={checkApi} style={{ marginTop: 10, padding: "9px 14px", border: "1px solid #dfe2ea", borderRadius: 9, background: "#fff", cursor: "pointer", fontWeight: 600 }}>Check API</button><div style={{ marginTop: 8, fontSize: 13, color: apiStatus === "Connected" ? "#16834b" : apiStatus === "Offline" ? "#c0392b" : "#75809a" }}>{apiStatus}</div></div><div><div style={{ color: "#75809a", fontSize: 13 }}>Lead synchronization</div><div style={{ fontWeight: 700, marginTop: 4 }}>Flectra via Outbox Worker</div><button onClick={checkFlectra} style={{ marginTop: 10, padding: "9px 14px", border: "1px solid #dfe2ea", borderRadius: 9, background: "#fff", cursor: "pointer", fontWeight: 600 }}>Check Flectra</button><div style={{ marginTop: 8, fontSize: 13, color: flectraStatus === "Connected" ? "#16834b" : flectraStatus === "Offline" ? "#c0392b" : "#75809a" }}>{flectraStatus}</div></div></div></div></section>)}</><><>{activeView === "Activities" && (<section><h1 style={{ fontSize: 34, margin: 0 }}>Activities</h1><p style={{ color: "#75809a", marginTop: 6 }}>Recent activity across your leads</p><div style={{ marginTop: 24, background: "#fff", border: "1px solid #e4e6ee", borderRadius: 14, overflow: "hidden" }}>{activities.map((activity) => (<div key={activity.id} onClick={() => setSelectedLead(activity.lead)} onMouseEnter={() => setHoveredActivity(activity.id)} onMouseLeave={() => setHoveredActivity("")} style={{ display: "grid", gridTemplateColumns: "1.4fr 1.5fr 1.5fr 1fr", padding: "16px 18px", borderTop: "1px solid #eef0f5", alignItems: "center", cursor: "pointer", transition: "background 0.15s ease", background: hoveredActivity === activity.id ? "#f7f5ff" : "#fff" }}><div style={{ fontWeight: 700 }}>{activity.type}</div><div>{activity.lead.name}</div><div style={{ color: "#5f6880" }}>{activity.lead.company || "No company"}</div><div style={{ color: "#75809a", fontSize: 13 }}>{new Date(activity.date).toLocaleString()}</div></div>))}</div></section>)}</>
+{activeView === "Companies" && (<section><h1 style={{ fontSize: 34, margin: 0 }}>Companies</h1><p style={{ color: "#75809a", marginTop: 6 }}>Companies from your leads</p><input value={companySearch} onChange={(e) => setCompanySearch(e.target.value)} placeholder="Search companies..." style={{ marginTop: 18, width: "100%", maxWidth: 420, padding: "11px 14px", border: "1px solid #dfe2ea", borderRadius: 10, fontSize: 14, outline: "none" }} /><div style={{ marginTop: 24, background: "#fff", border: "1px solid #e4e6ee", borderRadius: 14, overflow: "hidden" }}><div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1.5fr", padding: "14px 18px", background: "#f7f8fc", fontSize: 12, fontWeight: 700, color: "#75809a" }}><div>COMPANY</div><div>LEADS</div><div>LAST LEAD</div></div>{filteredCompanies.map((company) => (<div key={company.name} onClick={() => setSelectedLead(company.latest)} onMouseEnter={() => setHoveredCompany(company.name)} onMouseLeave={() => setHoveredCompany("")} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1.5fr", padding: "16px 18px", borderTop: "1px solid #eef0f5", alignItems: "center", cursor: "pointer", transition: "background 0.15s ease", background: hoveredCompany === company.name ? "#f7f5ff" : "#fff" }}><div style={{ fontWeight: 700 }}>{company.name}</div><div>{company.leads}</div><div style={{ color: "#75809a", fontSize: 13 }}>{new Date(company.latest.createdAt).toLocaleDateString()}</div></div>))}</div></section>)}</>
 {activeView === "Leads" && (<><header
           style={{
             display: "flex",
@@ -225,7 +274,7 @@ export default function Home() {
           ))}
         </div>
 
-        <h2 style={{ fontSize: 22, marginBottom: 16 }}>Pipeline</h2>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}><h2 style={{ fontSize: 22, margin: 0 }}>Pipeline</h2><div style={{ display: "flex", alignItems: "center", gap: 8 }}><button type="button" disabled={currentPage === 1} onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} style={{ padding: "6px 10px", border: "1px solid #e2e5ef", borderRadius: 8, background: "#fff", color: "#182033", cursor: currentPage === 1 ? "not-allowed" : "pointer", opacity: currentPage === 1 ? 0.5 : 1 }}>�</button><span style={{ fontSize: 13, color: "#75809a", minWidth: 52, textAlign: "center" }}>{currentPage} / {totalPages}</span><button type="button" disabled={currentPage === totalPages} onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))} style={{ padding: "6px 10px", border: "1px solid #e2e5ef", borderRadius: 8, background: "#fff", color: "#182033", cursor: currentPage === totalPages ? "not-allowed" : "pointer", opacity: currentPage === totalPages ? 0.5 : 1 }}>�</button></div></div>
 
         <div
           style={{
@@ -238,6 +287,7 @@ export default function Home() {
             const columnLeads = paginatedLeads.filter(
               (lead) => lead.status === column.status
             );
+
 
   return (
               <div
@@ -317,7 +367,7 @@ export default function Home() {
         </>)}
       </section>
 
-<div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 14, marginTop: 24, marginBottom: 24 }}><button type="button" disabled={currentPage === 1} onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} style={{ padding: "9px 14px", border: "1px solid #e2e5ef", borderRadius: 9, background: "#fff", color: "#182033", cursor: currentPage === 1 ? "not-allowed" : "pointer", opacity: currentPage === 1 ? 0.5 : 1 }}>Previous</button><span style={{ fontSize: 14, color: "#75809a" }}>Page {currentPage} of {totalPages}</span><button type="button" disabled={currentPage === totalPages} onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))} style={{ padding: "9px 14px", border: "1px solid #e2e5ef", borderRadius: 9, background: "#fff", color: "#182033", cursor: currentPage === totalPages ? "not-allowed" : "pointer", opacity: currentPage === totalPages ? 0.5 : 1 }}>Next</button></div>
+
 
       {showEditLead && selectedLead && (<div onClick={() => setShowEditLead(false)} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.35)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1100 }}><div onClick={(event) => event.stopPropagation()} style={{ width: 480, maxWidth: "calc(100vw - 32px)", background: "#fff", borderRadius: 16, padding: 24, boxShadow: "0 20px 60px rgba(0,0,0,0.18)" }}><h2 style={{ margin: 0, fontSize: 22 }}>Edit Lead</h2><p style={{ color: "#75809a", marginTop: 6 }}>Update lead information</p><form onSubmit={async (event) => { event.preventDefault(); const form = event.currentTarget; const data = new FormData(form); try { const response = await fetch(`http://localhost:4000/leads/${selectedLead.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: String(data.get("name") || ""), email: String(data.get("email") || ""), company: String(data.get("company") || ""), message: String(data.get("message") || "") }) }); if (!response.ok) { throw new Error((await response.text()) || "Failed to update lead"); } setShowEditLead(false); setSelectedLead(null); window.location.reload(); } catch (err) { setError(err instanceof Error ? err.message : "Failed to update lead"); } }}><input name="name" required defaultValue={selectedLead.name} style={{ width: "100%", boxSizing: "border-box", background: "#fff", colorScheme: "light", color: "#182033", padding: "11px 12px", marginTop: 18, border: "1px solid #e2e5ef", borderRadius: 10, fontSize: 14 }} /><input name="email" required type="email" defaultValue={selectedLead.email} style={{ width: "100%", boxSizing: "border-box", background: "#fff", colorScheme: "light", color: "#182033", padding: "11px 12px", marginTop: 12, border: "1px solid #e2e5ef", borderRadius: 10, fontSize: 14 }} /><input name="company" defaultValue={selectedLead.company || ""} style={{ width: "100%", boxSizing: "border-box", background: "#fff", colorScheme: "light", color: "#182033", padding: "11px 12px", marginTop: 12, border: "1px solid #e2e5ef", borderRadius: 10, fontSize: 14 }} /><textarea name="message" required minLength={10} defaultValue={selectedLead.message} rows={4} style={{ width: "100%", boxSizing: "border-box", background: "#fff", colorScheme: "light", color: "#182033", padding: "11px 12px", marginTop: 12, border: "1px solid #e2e5ef", borderRadius: 10, fontSize: 14, resize: "vertical" }} /><div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 18 }}><button type="button" onClick={() => setShowEditLead(false)} style={{ padding: "10px 16px", background: "#fff", color: "#182033", border: "1px solid #e2e5ef", borderRadius: 10, cursor: "pointer" }}>Cancel</button><button type="submit" style={{ padding: "10px 16px", background: "#5b36e8", color: "#fff", border: "none", borderRadius: 10, cursor: "pointer", fontWeight: 600 }}>Save Changes</button></div></form></div></div>)}
 
@@ -374,7 +424,7 @@ export default function Home() {
                   cursor: "pointer",
                 }}
               >
-                Г—
+                ×
               </button>
             </div>
 
@@ -506,6 +556,42 @@ export default function Home() {
     </main>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

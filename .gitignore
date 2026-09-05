@@ -16,3 +16,15 @@ out/
 coverage/
 .DS_Store
 *.log
+
+docker-compose.yml.bak
+flectra-backup-*.dump
+
+
+**/__pycache__/
+*.pyc
+
+
+**/__pycache__/
+*.pyc
+
