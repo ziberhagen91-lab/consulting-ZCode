@@ -4,11 +4,11 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: {
-    default: 'Consulting POC',
-    template: '%s — Consulting POC',
+    default: 'Consulting',
+    template: '%s — Consulting',
   },
   description:
-    'Consulting website POC: Next.js contact form → NestJS API → own PostgreSQL → outbox → Flectra CRM.',
+    'Practical consulting solutions for businesses, built around listening, clarity, and results.',
 };
 
 export default function RootLayout({
