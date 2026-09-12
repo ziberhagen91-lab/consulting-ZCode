@@ -12,6 +12,7 @@ type Lead = {
   status: "NEW" | "SYNCED" | "FAILED";
   flectraLeadId: string | null;
   createdAt: string;
+  archivedAt?: string | null;
   updatedAt: string;
 };
 
@@ -109,6 +110,7 @@ export default function Home() {
   };
 
   const filteredLeads = leads.filter((lead) => {
+    if (lead.archivedAt) return false;
     const query = search.trim().toLowerCase();
     if (statusFilter !== "ALL" && lead.status !== statusFilter) return false;
     if (!query) return true;
